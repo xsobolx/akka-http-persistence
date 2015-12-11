@@ -14,5 +14,10 @@ libraryDependencies ++= Seq(
   "io.spray" %%  "spray-json" % "1.3.2",
   "org.scalikejdbc" %% "scalikejdbc"       % "2.3.2",
   "org.postgresql" % "postgresql" % "9.4-1200-jdbc41",
-  "ch.qos.logback"  %  "logback-classic"   % "1.1.3"
+  "ch.qos.logback"  %  "logback-classic"   % "1.1.3",
+  "com.github.dnvriend" %% "akka-persistence-jdbc" % "1.2.2",
+  "org.iq80.leveldb"            % "leveldb"          % "0.7",
+  "org.fusesource.leveldbjni"   % "leveldbjni-all"   % "1.8"
 )
+
+resolvers += "dnvriend at bintray" at "http://dl.bintray.com/dnvriend/maven"

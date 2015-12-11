@@ -1,4 +1,5 @@
 
+import TodoPersistentActor.TodoAdd
 import akka.actor._
 import akka.event.Logging
 
@@ -6,13 +7,12 @@ import akka.event.Logging
   * Created by xsobolx on 10.12.2015.
   */
 
-trait ITodoActor{
+trait TodoManagerProvider{
   implicit val system: ActorSystem
-
-  lazy val todoActorRef: ActorRef = system.actorOf(Props(new TodoActor))
+  lazy val todoActorRef: ActorRef = system.actorOf(Props(new TodoManger))
 }
 
-object TodoActor{
+object TodoManger{
   case object Get
   case class Get(id: Int)
   case class Add(todo: String)
@@ -21,9 +21,11 @@ object TodoActor{
   case class Delete(id: Int)
 }
 
-class TodoActor extends Actor{
-  import TodoActor._
+class TodoManger extends Actor with SystemInfo{
+  import TodoManger._
   val log = Logging(context.system, this)
+
+  val persistenceActor = system.actorOf(Props(new TodoPersistentActor))
 
    def receive = {
     case Get =>
@@ -34,14 +36,17 @@ class TodoActor extends Actor{
       val todo = Todo(newTodo)
       log.info("Added todo " + todo.id + ": " + todo.title + " " + todo.isAchieved.toString)
       DataBase.addTodo(todo.id, newTodo)
+      persistenceActor ! TodoAdd(todo.id, todo.title)
       sender() ! todo
     case UpdateTitle(id, title) =>
       DataBase.updateTodoTitle(id, title)
       log.info("Update title of " + id + " todo")
+      persistenceActor ! UpdateTitle(id, title)
       self.forward(Get(id))
     case SetAchieved(id, isAchieved) =>
       DataBase.updateTodoAchieved(id, isAchieved)
       log.info("Switched achieved of " + id + " to " + isAchieved.toString)
+      persistenceActor ! SetAchieved(id, isAchieved)
       self.forward(Get(id))
     case Delete(id) =>
       DataBase.deleteTodo(id)

@@ -13,8 +13,8 @@ import akka.http.scaladsl.server.Directives._
 import akka.pattern._
 import akka.util._
 
-trait TodoRoute extends TodoMarshalling
-                with ITodoActor{
+trait TodoRouteProvider extends TodoMarshalling
+                with TodoManagerProvider{
   implicit val timeout: Timeout = 2 seconds
 
   def routes = {
@@ -27,13 +27,13 @@ trait TodoRoute extends TodoMarshalling
         pathPrefix("todos"){
           pathEnd{
             get{
-              onSuccess(todoActorRef ? TodoActor.Get){ todos =>
+              onSuccess(todoActorRef ? TodoManger.Get){ todos =>
                 complete(StatusCodes.OK, todos.asInstanceOf[Iterable[Todo]])
               }
             } ~
             post {
               entity(as[String]){ newTodo =>
-                onSuccess(todoActorRef ? TodoActor.Add(newTodo)){ todo =>
+                onSuccess(todoActorRef ? TodoManger.Add(newTodo)){ todo =>
                   complete(StatusCodes.OK, todo.asInstanceOf[Todo])
                 }
               }
@@ -41,26 +41,26 @@ trait TodoRoute extends TodoMarshalling
           } ~ {
             path(Segment){ id =>
               get{
-                onSuccess(todoActorRef ? TodoActor.Get(id.toInt)){ todo =>
+                onSuccess(todoActorRef ? TodoManger.Get(id.toInt)){ todo =>
                   complete(StatusCodes.OK, todo.asInstanceOf[Todo])
                 }
               } ~
               put{
                 entity(as[String]){newTitle =>
-                  onSuccess(todoActorRef ? TodoActor.UpdateTitle(id.toInt, newTitle)){todo =>
+                  onSuccess(todoActorRef ? TodoManger.UpdateTitle(id.toInt, newTitle)){ todo =>
                     complete(StatusCodes.OK, todo.asInstanceOf[Todo])
                   }
                 }
               } ~
               post{
                 entity(as[String]){isAchieved =>
-                  onSuccess(todoActorRef ? TodoActor.SetAchieved(id.toInt, isAchieved.toInt)) { todo =>
+                  onSuccess(todoActorRef ? TodoManger.SetAchieved(id.toInt, isAchieved.toInt)) { todo =>
                     complete(StatusCodes.OK, todo.asInstanceOf[Todo])
                   }
                 }
               } ~
               delete{
-                onSuccess(todoActorRef ? TodoActor.Delete(id.toInt)){ _ =>
+                onSuccess(todoActorRef ? TodoManger.Delete(id.toInt)){ _ =>
                   complete(StatusCodes.OK)
                 }
               }

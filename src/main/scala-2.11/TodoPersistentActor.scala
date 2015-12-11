@@ -1,47 +1,100 @@
-import akka.actor._
-import akka.persistence._
 
+import akka.actor.{Props, ActorRef, ActorSystem}
+import akka.event.Logging
+import akka.persistence._
 /**
   * Created by xsobolx on 10.12.2015.
   */
-case class Cmd(data: String)
-case class Evt(data: String)
 
+object TodoPersistentActor{
+  trait State
+  case object Uninitialized extends State
+  case class TodoState(id: Int, title: String, isAchieved: Int) extends State
 
-case class TodoState(events: List[String] = Nil){
-  def updated(evt: Evt): TodoState = copy(evt.data :: events)
-  def size: Int = events.length
+  sealed trait Command
+  case class TodoAdd(id: Int, title: String) extends Command
+  case class UpdateTitle(id: Int, title: String) extends Command
+  case class ChangeAchieved(id:Int, isAchieved: Int) extends Command
+  case class Delete(id: Int) extends Command
 
-  override def toString: String = events.reverse.toString
+  sealed trait Event
+  case class TodoAdded(id: Int, title: String) extends Event
+  case class TitleUpdated(title: String) extends Event
+  case class AchieveChanged(isAchieved: Int) extends Event
+  case class Deleted(id: Int) extends Event
+
+  val eventsPerSnapshot = 5
 }
 
 class TodoPersistentActor extends PersistentActor{
-  override def persistenceId = "todo-id"
+  import TodoPersistentActor._
 
-  var state = TodoState()
+  override def persistenceId = "todo-persistence-id"
 
-  def updateState(event: Evt): Unit =
-    state = state.updated(event)
+  var eventsSinceLastSnapshot = 0
 
-  def numEvents =
-    state.size
+  protected var state: State = Uninitialized
+
+  val log = Logging(context.system, this)
+
+  def afterEventPersist(event: Event): Unit = {
+    eventsSinceLastSnapshot += 1
+    if (eventsSinceLastSnapshot >= eventsPerSnapshot) {
+      log.debug(s"$eventsSinceLastSnapshot events reached, saving snapshot")
+      saveSnapshot(state)
+      eventsSinceLastSnapshot = 0
+    }
+    updateState(event)
+  }
+
+  def updateState(event: Event): Unit = event match {
+    case TodoAdded(id, title) =>
+      state = TodoState(id, title, 0)
+    case TitleUpdated(newTitle) =>
+      state match {
+        case t: TodoState => state = t.copy(title = newTitle)
+        case _            => //
+      }
+    case AchieveChanged(newIsAchieved) =>
+      state match {
+        case t: TodoState => state = t.copy(isAchieved = newIsAchieved)
+      }
+  }
+
+
+  private def publish(event: Event): Unit =
+    context.system.eventStream.publish(event)
+
 
   val receiveRecover: Receive = {
-    case evt: Evt => updateState(evt)
+    case evt: Event =>
+      eventsSinceLastSnapshot += 1
+      updateState(evt)
     case SnapshotOffer(_, snapshot: TodoState) => state = snapshot
   }
 
   val receiveCommand: Receive = {
-    case Cmd(data) =>
-      persist(Evt(s"${data}-${numEvents}"))(updateState)
-      persist(Evt(s"${data}-${numEvents + 1}")){ event =>
-        updateState(event)
-        context.system.eventStream.publish(event)
+    case TodoAdd(id, title) =>
+      persist(TodoAdded(id, title)){ event =>
+        afterEventPersist(event)
+        publish(event)
+        log.info(s"Todo adding ${id}: ${title}  persisted")
+      }
+    case UpdateTitle(id, title) =>
+      persist(TitleUpdated(title)){ event =>
+        afterEventPersist(event)
+        publish(event)
+        log.info(s"Todo ${id} update title to  ${title} persisted")
+      }
+    case ChangeAchieved(id, isAchieved) =>
+      persist(AchieveChanged(isAchieved)){ event =>
+        afterEventPersist(event)
+        log.info(s"Todo ${id} change isAchievd to ${isAchieved} persisted")
+        publish(event)
       }
     case "snap" => saveSnapshot(state)
     case "print" => println(state)
   }
-
 }
 
 
