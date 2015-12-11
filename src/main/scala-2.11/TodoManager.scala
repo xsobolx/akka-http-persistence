@@ -1,5 +1,5 @@
 
-import TodoPersistentActor.TodoAdd
+import TodoPersistentActor._
 import akka.actor._
 import akka.event.Logging
 
@@ -34,19 +34,22 @@ class TodoManger extends Actor with SystemInfo{
       sender() ! DataBase.findTodoById(id).getOrElse(Status.Failure(new IllegalStateException("ID not found")))
     case Add(newTodo: String) =>
       val todo = Todo(newTodo)
-      log.info("Added todo " + todo.id + ": " + todo.title + " " + todo.isAchieved.toString)
+//      log.info("Added todo " + todo.id + ": " + todo.title + " " + todo.isAchieved.toString)
       DataBase.addTodo(todo.id, newTodo)
       persistenceActor ! TodoAdd(todo.id, todo.title)
+      persistenceActor ! "print"
       sender() ! todo
     case UpdateTitle(id, title) =>
       DataBase.updateTodoTitle(id, title)
-      log.info("Update title of " + id + " todo")
-      persistenceActor ! UpdateTitle(id, title)
+//      log.info("Update title of " + id + " todo")
+      persistenceActor ! TitleUpdate(id, title)
+      persistenceActor ! "print"
       self.forward(Get(id))
     case SetAchieved(id, isAchieved) =>
       DataBase.updateTodoAchieved(id, isAchieved)
-      log.info("Switched achieved of " + id + " to " + isAchieved.toString)
-      persistenceActor ! SetAchieved(id, isAchieved)
+//      log.info("Switched achieved of " + id + " to " + isAchieved.toString)
+      persistenceActor ! ChangeAchieved(id, isAchieved)
+      persistenceActor ! "print"
       self.forward(Get(id))
     case Delete(id) =>
       DataBase.deleteTodo(id)
